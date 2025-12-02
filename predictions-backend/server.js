@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch'); // ✅ install with: npm install node-fetch
+const fetch = require('node-fetch'); // install with: npm install node-fetch
 
 const app = express();
 
@@ -20,13 +20,17 @@ app.get('/api/predictions', (req, res) => {
   });
 });
 
-// ✅ NEW: Extended predictions endpoint for multiple sports using Sportradar (football live + stubs for others)
+// ✅ NEW: Extended predictions endpoint for multiple sports using Sportradar
 app.get('/api/predictions-by-sport', async (req, res) => {
   const sport = (req.query.sport || "football").toLowerCase();
-  const date = req.query.date || "2025-12-05"; // optional date override for schedules
+
+  // ✅ Default date = today in YYYY-MM-DD format, unless overridden with ?date=YYYY-MM-DD
+  const today = new Date();
+  const date = req.query.date || today.toISOString().split('T')[0];
+
   let matches = [];
 
-  // Existing stubbed matches for non-football (kept intact to avoid breaking Builder.io)
+  // Stubbed fallback data for each sport (kept to avoid breaking Builder.io)
   const sampleMatches = {
     football: [
       {
@@ -97,45 +101,47 @@ app.get('/api/predictions-by-sport', async (req, res) => {
   };
 
   try {
-    if (sport === "football") {
-      // ✅ Live data from Sportradar (soccer). Uses optional ?date=YYYY-MM-DD; defaults above.
-      const url = `https://api.sportradar.com/soccer/trial/v4/en/schedules/${date}/results.json?api_key=${process.env.SPORTRADAR_API_KEY}`;
+    // Map sport to Sportradar schedule endpoints
+    const endpoints = {
+      football: `https://api.sportradar.com/soccer/trial/v4/en/schedules/${date}/results.json`,
+      rugby: `https://api.sportradar.com/rugby/trial/v2/en/schedules/${date}/results.json`,
+      tennis: `https://api.sportradar.com/tennis/trial/v3/en/schedules/${date}/results.json`,
+      basketball: `https://api.sportradar.com/basketball/trial/v7/en/schedules/${date}/results.json`,
+      icehockey: `https://api.sportradar.com/icehockey/trial/v2/en/schedules/${date}/results.json`,
+      snooker: `https://api.sportradar.com/snooker/trial/v2/en/schedules/${date}/results.json`
+    };
+
+    if (endpoints[sport]) {
+      const url = `${endpoints[sport]}?api_key=${process.env.SPORTRADAR_API_KEY}`;
       const response = await fetch(url);
-      if (!response.ok) {
-        console.error("Sportradar fetch failed:", response.status, await response.text());
-      }
       const data = await response.json();
 
       if (data && Array.isArray(data.results)) {
         matches = data.results
-          .filter(m => m && m.sport_event && Array.isArray(m.sport_event.competitors) && m.sport_event.competitors.length >= 2)
-          .map(match => {
-            const home = match.sport_event.competitors[0];
-            const away = match.sport_event.competitors[1];
-            return {
-              id: match.sport_event.id,
-              teamA: home.name,
-              teamB: away.name,
-              matchTime: match.sport_event.start_time,
-              winProbability: 0.5, // placeholder until odds integrated
-              textCommentary: `We suggest ${home.name} vs ${away.name} could be competitive. Outcomes are not guaranteed.`
-            };
-          });
+          .filter(m => m?.sport_event?.competitors?.length >= 2)
+          .map(m => ({
+            id: m.sport_event.id,
+            teamA: m.sport_event.competitors[0].name,
+            teamB: m.sport_event.competitors[1].name,
+            matchTime: m.sport_event.start_time,
+            winProbability: 0.5, // placeholder until odds integrated
+            textCommentary: `We suggest ${m.sport_event.competitors[0].name} vs ${m.sport_event.competitors[1].name} could be competitive. Outcomes are not guaranteed.`
+          }));
       }
 
-      // If Sportradar returns nothing, fall back to stub to avoid breaking Builder.io
-      if (!matches || matches.length === 0) {
-        matches = sampleMatches.football;
+      // Fallback to stubs if no live data returned
+      if (!matches.length) {
+        matches = sampleMatches[sport] || [];
       }
     } else {
-      // ✅ For now, keep stubs for other sports so nothing breaks
+      // Unknown sport: return stub if available
       matches = sampleMatches[sport] || [];
     }
 
     res.json({ matches });
   } catch (err) {
     console.error("Error in /api/predictions-by-sport:", err);
-    // On error, respond with safe fallback so Builder.io doesn't break
+    // Safe fallback so Builder.io doesn't break
     res.status(200).json({ matches: sampleMatches[sport] || [] });
   }
 });
