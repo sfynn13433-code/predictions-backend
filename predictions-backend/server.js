@@ -19,9 +19,9 @@ app.use(express.json());
 // Config & Constants
 // ==============================
 const PORT = process.env.PORT || 4000;
-const SPORTRADER_API_KEY = process.env.SPORTRADER_API_KEY;
-const SPORTRADER_BASE_URL =
-  process.env.SPORTRADER_BASE_URL || "https://api.sportrader.com";
+const SPORTRADAR_API_KEY = process.env.SPORTRADAR_API_KEY;
+const SPORTRADAR_BASE_URL =
+  process.env.SPORTRADAR_BASE_URL || "https://api.sportradar.com";
 
 // Supported sports (aligned with your platform scope)
 const SUPPORTED_SPORTS = new Set([
@@ -38,11 +38,11 @@ const SUPPORTED_SPORTS = new Set([
 // ==============================
 
 /**
- * Build Sportrader URL for predictions by sport.
- * Adjust path/query to match actual Sportrader API.
+ * Build Sportradar URL for predictions by sport.
+ * Adjust path/query to match actual Sportradar API.
  */
-function buildSportraderUrlForPredictions(sport) {
-  const url = new URL(`${SPORTRADER_BASE_URL}/predictions`);
+function buildSportradarUrlForPredictions(sport) {
+  const url = new URL(`${SPORTRADAR_BASE_URL}/predictions`);
   url.searchParams.set("sport", sport);
   return url.toString();
 }
@@ -103,7 +103,9 @@ function generateExpertConclusion(sport, upstream) {
  * Root route — friendly landing page
  */
 app.get("/", (req, res) => {
-  res.send("Backend is live 🎉 Try /health, /api/supported-sports, or /api/predictions-by-sport?sport=football");
+  res.send(
+    "Backend is live 🎉 Try /health, /api/supported-sports, or /api/predictions-by-sport?sport=football"
+  );
 });
 
 /**
@@ -188,18 +190,18 @@ app.get("/api/predictions-by-sport", async (req, res) => {
       });
     }
 
-    if (!SPORTRADER_API_KEY) {
+    if (!SPORTRADAR_API_KEY) {
       return res.status(500).json({
-        error: "SPORTRADER_API_KEY is not configured on the server",
+        error: "SPORTRADAR_API_KEY is not configured on the server",
       });
     }
 
-    // Build upstream request to Sportrader
-    const url = buildSportraderUrlForPredictions(sport);
+    // Build upstream request to Sportradar
+    const url = buildSportradarUrlForPredictions(sport);
     const upstreamResponse = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${SPORTRADER_API_KEY}`,
+        Authorization: `Bearer ${SPORTRADAR_API_KEY}`,
         "Content-Type": "application/json",
       },
     });
@@ -210,7 +212,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
         .text()
         .catch(() => "Unable to read upstream response body");
       return res.status(502).json({
-        error: "Upstream fetch to Sportrader failed",
+        error: "Upstream fetch to Sportradar failed",
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
         upstreamBody,
@@ -235,7 +237,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
     console.error("Error in /api/predictions-by-sport:", err);
     return res
       .status(500)
-      .json({ error: "Failed to fetch predictions from Sportrader" });
+      .json({ error: "Failed to fetch predictions from Sportradar" });
   }
 });
 
