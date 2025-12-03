@@ -100,6 +100,13 @@ function generateExpertConclusion(sport, upstream) {
 // ==============================
 
 /**
+ * Root route — friendly landing page
+ */
+app.get("/", (req, res) => {
+  res.send("Backend is live 🎉 Try /health, /api/supported-sports, or /api/predictions-by-sport?sport=football");
+});
+
+/**
  * Health check — useful for monitoring and diagnostics.
  */
 app.get("/health", (req, res) => {
