@@ -19,9 +19,9 @@ app.use(express.json());
 // Config & Constants
 // ==============================
 const PORT = process.env.PORT || 4000;
-const SPRTRADER_API_KEY = process.env.SPRTRADER_API_KEY;
-const SPRTRADER_BASE_URL =
-  process.env.SPRTRADER_BASE_URL || "https://api.sprtrader.com";
+const SPORTRADER_API_KEY = process.env.SPORTRADER_API_KEY;
+const SPORTRADER_BASE_URL =
+  process.env.SPORTRADER_BASE_URL || "https://api.sportrader.com";
 
 // Supported sports (aligned with your platform scope)
 const SUPPORTED_SPORTS = new Set([
@@ -38,11 +38,11 @@ const SUPPORTED_SPORTS = new Set([
 // ==============================
 
 /**
- * Build Sprtrader URL for predictions by sport.
- * Adjust path/query to match actual Sprtrader API.
+ * Build Sportrader URL for predictions by sport.
+ * Adjust path/query to match actual Sportrader API.
  */
-function buildSprtraderUrlForPredictions(sport) {
-  const url = new URL(`${SPRTRADER_BASE_URL}/predictions`);
+function buildSportraderUrlForPredictions(sport) {
+  const url = new URL(`${SPORTRADER_BASE_URL}/predictions`);
   url.searchParams.set("sport", sport);
   return url.toString();
 }
@@ -181,18 +181,18 @@ app.get("/api/predictions-by-sport", async (req, res) => {
       });
     }
 
-    if (!SPRTRADER_API_KEY) {
+    if (!SPORTRADER_API_KEY) {
       return res.status(500).json({
-        error: "SPRTRADER_API_KEY is not configured on the server",
+        error: "SPORTRADER_API_KEY is not configured on the server",
       });
     }
 
-    // Build upstream request to Sprtrader
-    const url = buildSprtraderUrlForPredictions(sport);
+    // Build upstream request to Sportrader
+    const url = buildSportraderUrlForPredictions(sport);
     const upstreamResponse = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${SPRTRADER_API_KEY}`,
+        Authorization: `Bearer ${SPORTRADER_API_KEY}`,
         "Content-Type": "application/json",
       },
     });
@@ -203,7 +203,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
         .text()
         .catch(() => "Unable to read upstream response body");
       return res.status(502).json({
-        error: "Upstream fetch to Sprtrader failed",
+        error: "Upstream fetch to Sportrader failed",
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
         upstreamBody,
@@ -228,7 +228,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
     console.error("Error in /api/predictions-by-sport:", err);
     return res
       .status(500)
-      .json({ error: "Failed to fetch predictions from Sprtrader" });
+      .json({ error: "Failed to fetch predictions from Sportrader" });
   }
 });
 
