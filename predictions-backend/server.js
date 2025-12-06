@@ -19,7 +19,7 @@ app.use(express.json());
 // Config & Constants
 // ==============================
 const PORT = process.env.PORT || 4000;
-const SPORTRADAR_API_KEY = process.env.SPORTRADAR_API_KEY;
+const SPORTRADAR_SOCCER_KEY = process.env.SPORTRADAR_SOCCER_KEY; // renamed for clarity
 const SPORTRADAR_BASE_URL =
   process.env.SPORTRADAR_BASE_URL || "https://api.sportradar.com";
 
@@ -44,17 +44,18 @@ const SUPPORTED_SPORTS = new Set([
 function buildSportradarUrlForPredictions(sport) {
   switch (sport) {
     case "football":
-      return `${SPORTRADAR_BASE_URL}/soccer/trial/v4/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+      // football in UI maps to soccer in API
+      return `${SPORTRADAR_BASE_URL}/soccer/trial/v4/en/matches.json`;
     case "rugby":
-      return `${SPORTRADAR_BASE_URL}/rugby/trial/v2/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+      return `${SPORTRADAR_BASE_URL}/rugby/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
     case "tennis":
-      return `${SPORTRADAR_BASE_URL}/tennis/trial/v3/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+      return `${SPORTRADAR_BASE_URL}/tennis/trial/v3/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
     case "basketball":
       return `${SPORTRADAR_BASE_URL}/nba/trial/v8/en/games/2024/REG/schedule.json`;
     case "icehockey":
-      return `${SPORTRADAR_BASE_URL}/icehockey/trial/v2/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+      return `${SPORTRADAR_BASE_URL}/icehockey/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
     case "snooker":
-      return `${SPORTRADAR_BASE_URL}/snooker/trial/v2/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+      return `${SPORTRADAR_BASE_URL}/snooker/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
     default:
       return null;
   }
@@ -203,9 +204,9 @@ app.get("/api/predictions-by-sport", async (req, res) => {
       });
     }
 
-    if (!SPORTRADAR_API_KEY) {
+    if (!SPORTRADAR_SOCCER_KEY) {
       return res.status(500).json({
-        error: "SPORTRADAR_API_KEY is not configured on the server",
+        error: "SPORTRADAR_SOCCER_KEY is not configured on the server",
       });
     }
 
@@ -215,10 +216,13 @@ app.get("/api/predictions-by-sport", async (req, res) => {
       return res.status(400).json({ error: "Sport mapping not found" });
     }
 
-    // Auth style: soccer/tennis/etc use query param, NBA uses header
+    // Auth style: soccer uses x-api-key header, NBA uses header, others use query param
     let headers = { accept: "application/json" };
+    if (sport === "football") {
+      headers["x-api-key"] = SPORTRADAR_SOCCER_KEY;
+    }
     if (sport === "basketball") {
-      headers["x-api-key"] = SPORTRADAR_API_KEY;
+      headers["x-api-key"] = SPORTRADAR_SOCCER_KEY; // replace with NBA key later
     }
 
     const upstreamResponse = await fetch(url, { method: "GET", headers });
