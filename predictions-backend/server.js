@@ -42,9 +42,22 @@ const SUPPORTED_SPORTS = new Set([
  * Adjust path/query to match actual Sportradar API.
  */
 function buildSportradarUrlForPredictions(sport) {
-  const url = new URL(`${SPORTRADAR_BASE_URL}/predictions`);
-  url.searchParams.set("sport", sport);
-  return url.toString();
+  switch (sport) {
+    case "football":
+      return `${SPORTRADAR_BASE_URL}/soccer/trial/v4/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+    case "rugby":
+      return `${SPORTRADAR_BASE_URL}/rugby/trial/v2/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+    case "tennis":
+      return `${SPORTRADAR_BASE_URL}/tennis/trial/v3/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+    case "basketball":
+      return `${SPORTRADAR_BASE_URL}/nba/trial/v8/en/games/2024/REG/schedule.json`;
+    case "icehockey":
+      return `${SPORTRADAR_BASE_URL}/icehockey/trial/v2/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+    case "snooker":
+      return `${SPORTRADAR_BASE_URL}/snooker/trial/v2/en/matches.json?api_key=${SPORTRADAR_API_KEY}`;
+    default:
+      return null;
+  }
 }
 
 /**
@@ -198,13 +211,17 @@ app.get("/api/predictions-by-sport", async (req, res) => {
 
     // Build upstream request to Sportradar
     const url = buildSportradarUrlForPredictions(sport);
-    const upstreamResponse = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${SPORTRADAR_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    });
+    if (!url) {
+      return res.status(400).json({ error: "Sport mapping not found" });
+    }
+
+    // Auth style: soccer/tennis/etc use query param, NBA uses header
+    let headers = { accept: "application/json" };
+    if (sport === "basketball") {
+      headers["x-api-key"] = SPORTRADAR_API_KEY;
+    }
+
+    const upstreamResponse = await fetch(url, { method: "GET", headers });
 
     // Handle non-2xx upstream responses
     if (!upstreamResponse.ok) {
