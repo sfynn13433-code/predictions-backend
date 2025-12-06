@@ -45,7 +45,7 @@ function buildSportradarUrlForPredictions(sport) {
   switch (sport) {
     case "football":
       // football in UI maps to soccer in API
-      return `${SPORTRADAR_BASE_URL}/soccer/trial/v4/en/matches.json`;
+      return `${SPORTRADAR_BASE_URL}/soccer/trial/v4/en/competitions.json`;
     case "rugby":
       return `${SPORTRADAR_BASE_URL}/rugby/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
     case "tennis":
