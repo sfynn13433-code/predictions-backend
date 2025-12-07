@@ -19,9 +19,17 @@ app.use(express.json());
 // Config & Constants
 // ==============================
 const PORT = process.env.PORT || 4000;
-const X_RAPIDAPI_KEY = process.env.X_RAPIDAPI_KEY; // RapidAPI key
-// Example RapidAPI base URL for API-Football (soccer). Replace with correct host for other sports.
-const RAPIDAPI_BASE_URL = "https://api-football-v1.p.rapidapi.com/v3";
+const API_SPORTS_KEY = process.env.API_SPORTS_KEY; // API-Sports key
+
+// Base URLs for API-Sports endpoints
+const API_SPORTS_BASE = {
+  football: "https://v3.football.api-sports.io",
+  rugby: "https://v1.rugby.api-sports.io",
+  basketball: "https://v1.basketball.api-sports.io",
+  icehockey: "https://v1.hockey.api-sports.io",
+  tennis: "https://v1.tennis.api-sports.io",
+  snooker: "https://v1.snooker.api-sports.io",
+};
 
 // Supported sports (aligned with your platform scope)
 const SUPPORTED_SPORTS = new Set([
@@ -38,29 +46,22 @@ const SUPPORTED_SPORTS = new Set([
 // ==============================
 
 /**
- * Build RapidAPI URL for predictions by sport.
- * Adjust path/query to match actual RapidAPI endpoints.
+ * Build API-Sports URL for predictions by sport.
  */
-function buildRapidApiUrlForPredictions(sport) {
+function buildApiSportsUrlForPredictions(sport) {
   switch (sport) {
     case "football":
-      // football in UI maps to soccer in API-Football
-      return `${RAPIDAPI_BASE_URL}/fixtures?live=all`;
+      return `${API_SPORTS_BASE.football}/fixtures?live=all`;
     case "rugby":
-      // Example placeholder — replace with actual RapidAPI rugby endpoint
-      return `https://example-rugby-api.p.rapidapi.com/matches`;
+      return `${API_SPORTS_BASE.rugby}/games?live=all`;
     case "tennis":
-      // Example placeholder — replace with actual RapidAPI tennis endpoint
-      return `https://example-tennis-api.p.rapidapi.com/matches`;
+      return `${API_SPORTS_BASE.tennis}/games?live=all`;
     case "basketball":
-      // Example placeholder — replace with actual RapidAPI basketball endpoint
-      return `https://example-basketball-api.p.rapidapi.com/games`;
+      return `${API_SPORTS_BASE.basketball}/games?live=all`;
     case "icehockey":
-      // Example placeholder — replace with actual RapidAPI icehockey endpoint
-      return `https://example-icehockey-api.p.rapidapi.com/matches`;
+      return `${API_SPORTS_BASE.icehockey}/games?live=all`;
     case "snooker":
-      // Example placeholder — replace with actual RapidAPI snooker endpoint
-      return `https://example-snooker-api.p.rapidapi.com/matches`;
+      return `${API_SPORTS_BASE.snooker}/games?live=all`;
     default:
       return null;
   }
@@ -193,21 +194,20 @@ app.get("/api/predictions-by-sport", async (req, res) => {
       });
     }
 
-    if (!X_RAPIDAPI_KEY) {
+    if (!API_SPORTS_KEY) {
       return res.status(500).json({
-        error: "X_RAPIDAPI_KEY is not configured on the server",
+        error: "API_SPORTS_KEY is not configured on the server",
       });
     }
 
-    const url = buildRapidApiUrlForPredictions(sport);
+    const url = buildApiSportsUrlForPredictions(sport);
     if (!url) {
       return res.status(400).json({ error: "Sport mapping not found" });
     }
 
     let headers = {
       accept: "application/json",
-      "X-RapidAPI-Key": X_RAPIDAPI_KEY,
-      "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com", // required for football
+      "x-apisports-key": API_SPORTS_KEY,
     };
 
     const upstreamResponse = await fetch(url, { method: "GET", headers });
@@ -217,7 +217,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
         .text()
         .catch(() => "Unable to read upstream response body");
       return res.status(502).json({
-        error: "Upstream fetch to RapidAPI failed",
+        error: "Upstream fetch to API-Sports failed",
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
         upstreamBody,
@@ -239,7 +239,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
     console.error("Error in /api/predictions-by-sport:", err);
     return res
       .status(500)
-      .json({ error: "Failed to fetch predictions from RapidAPI" });
+      .json({ error: "Failed to fetch predictions from API-Sports" });
   }
 });
 
