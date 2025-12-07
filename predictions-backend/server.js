@@ -1,157 +1,251 @@
-const express = require('express');
-const cors = require('cors');
-const fetch = require('node-fetch'); // install with: npm install node-fetch
+// server.js
+
+// ==============================
+// Imports & App Setup
+// ==============================
+const express = require("express");
+const cors = require("cors");
+const fetch = require("node-fetch"); // For Node <=20; Node 18+ has global fetch, but keeping explicit for reliability.
 
 const app = express();
 
-app.use(express.json());
+// CORS for frontend (Builder.io or your domain). Global allow for now.
 app.use(cors());
 
-// ✅ FIX: Express 5 requires regex for wildcard routes
-app.options(/.*/, cors());
+// Body parsing for future POST endpoints, if needed.
+app.use(express.json());
 
-// Your original predictions endpoint (kept intact)
-app.get('/api/predictions', (req, res) => {
+// ==============================
+// Config & Constants
+// ==============================
+const PORT = process.env.PORT || 4000;
+const API_SPORTS_KEY = process.env.API_SPORTS_KEY; // API-Sports key
+
+// Base URLs for API-Sports endpoints
+const API_SPORTS_BASE = {
+  football: "https://v3.football.api-sports.io",
+  rugby: "https://v1.rugby.api-sports.io",
+  basketball: "https://v1.basketball.api-sports.io",
+  icehockey: "https://v1.hockey.api-sports.io",
+  tennis: "https://v1.tennis.api-sports.io",
+  snooker: "https://v1.snooker.api-sports.io",
+};
+
+// Supported sports (aligned with your platform scope)
+const SUPPORTED_SPORTS = new Set([
+  "football",
+  "rugby",
+  "tennis",
+  "basketball",
+  "icehockey",
+  "snooker",
+]);
+
+// ==============================
+// Utilities
+// ==============================
+
+/**
+ * Build API-Sports URL for predictions by sport.
+ */
+function buildApiSportsUrlForPredictions(sport) {
+  switch (sport) {
+    case "football":
+      return `${API_SPORTS_BASE.football}/fixtures?live=all`;
+    case "rugby":
+      return `${API_SPORTS_BASE.rugby}/games?live=all`;
+    case "tennis":
+      return `${API_SPORTS_BASE.tennis}/games?live=all`;
+    case "basketball":
+      return `${API_SPORTS_BASE.basketball}/games?live=all`;
+    case "icehockey":
+      return `${API_SPORTS_BASE.icehockey}/games?live=all`;
+    case "snooker":
+      return `${API_SPORTS_BASE.snooker}/games?live=all`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Normalize upstream payload into a stable schema for the frontend.
+ */
+function normalizePredictionsResponse(sport, upstream) {
+  return {
+    sport,
+    fetchedAt: new Date().toISOString(),
+    data: upstream,
+  };
+}
+
+/**
+ * Generate AI-style expert conclusion from upstream data.
+ */
+function generateExpertConclusion(sport, upstream) {
+  const teams =
+    upstream?.teams ||
+    upstream?.match?.teams ||
+    upstream?.fixture?.teams ||
+    null;
+
+  const teamA =
+    (Array.isArray(teams) && teams[0]?.name) ||
+    upstream?.homeTeam?.name ||
+    upstream?.home?.name ||
+    "Home";
+  const teamB =
+    (Array.isArray(teams) && teams[1]?.name) ||
+    upstream?.awayTeam?.name ||
+    upstream?.away?.name ||
+    "Away";
+
+  const edge =
+    upstream?.modelEdge ||
+    upstream?.probabilities?.favorite ||
+    upstream?.summary ||
+    null;
+
+  const baseLine =
+    edge
+      ? `Edge to ${typeof edge === "string" ? edge : JSON.stringify(edge)}`
+      : "The match appears closely contested";
+
+  return `Expert analysis for ${sport}: ${teamA} vs ${teamB}. ${baseLine}. Consider recent form, injuries, and venue effects; late team news may shift momentum. Predictions are guidance, not guarantees.`;
+}
+
+// ==============================
+// Routes
+// ==============================
+
+app.get("/", (req, res) => {
+  res.send(
+    "Backend is live 🎉 Try /health, /api/supported-sports, or /api/predictions-by-sport?sport=football"
+  );
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime(), timestamp: Date.now() });
+});
+
+app.get("/api/supported-sports", (req, res) => {
+  res.json({ sports: Array.from(SUPPORTED_SPORTS) });
+});
+
+app.get("/api/subscriptions", (req, res) => {
   res.json({
-    predictions: [
-      { id: 1, title: "Team A will win", confidence: 0.75 },
-      { id: 2, title: "Player X will score", confidence: 0.65 }
-    ]
+    plans: [
+      {
+        name: "Free",
+        duration: "7 days",
+        price: "0",
+        features: [
+          "Basic predictions",
+          "Limited refresh frequency",
+          "No priority updates",
+        ],
+      },
+      {
+        name: "Pro",
+        duration: "30 days",
+        price: "9.99",
+        features: [
+          "All sports",
+          "AI expert conclusions",
+          "Priority updates",
+          "Faster refresh",
+        ],
+      },
+      {
+        name: "Premium",
+        duration: "90 days",
+        price: "24.99",
+        features: [
+          "All sports",
+          "AI expert conclusions",
+          "Priority updates",
+          "Early features access",
+        ],
+      },
+    ],
+    updatedAt: new Date().toISOString(),
   });
 });
 
-// ✅ NEW: Extended predictions endpoint for multiple sports using Sportradar
-app.get('/api/predictions-by-sport', async (req, res) => {
-  const sport = (req.query.sport || "football").toLowerCase();
-
-  // ✅ Default date = today in YYYY-MM-DD format, unless overridden with ?date=YYYY-MM-DD
-  const today = new Date();
-  const date = req.query.date || today.toISOString().split('T')[0];
-
-  let matches = [];
-
-  // Stubbed fallback data for each sport (kept to avoid breaking Builder.io)
-  const sampleMatches = {
-    football: [
-      {
-        id: 1,
-        teamA: "Manchester United",
-        teamB: "Liverpool",
-        matchTime: "2025-12-05T19:30:00Z",
-        winProbability: 0.62,
-        textCommentary:
-          "We suggest Manchester United could perform strongly based on recent form. Outcomes are not guaranteed."
-      }
-    ],
-    rugby: [
-      {
-        id: 2,
-        teamA: "Springboks",
-        teamB: "All Blacks",
-        matchTime: "2025-12-06T15:00:00Z",
-        winProbability: 0.55,
-        textCommentary:
-          "We suggest the Springboks could edge this one based on recent form. Outcomes are not guaranteed."
-      }
-    ],
-    tennis: [
-      {
-        id: 3,
-        teamA: "Novak Djokovic",
-        teamB: "Carlos Alcaraz",
-        matchTime: "2025-12-07T12:00:00Z",
-        winProbability: 0.70,
-        textCommentary:
-          "We suggest Djokovic could perform strongly based on recent form. Outcomes are not guaranteed."
-      }
-    ],
-    basketball: [
-      {
-        id: 4,
-        teamA: "Lakers",
-        teamB: "Warriors",
-        matchTime: "2025-12-08T20:00:00Z",
-        winProbability: 0.48,
-        textCommentary:
-          "We suggest the Warriors could perform strongly based on recent form. Outcomes are not guaranteed."
-      }
-    ],
-    icehockey: [
-      {
-        id: 5,
-        teamA: "Toronto Maple Leafs",
-        teamB: "Montreal Canadiens",
-        matchTime: "2025-12-09T19:00:00Z",
-        winProbability: 0.60,
-        textCommentary:
-          "We suggest Toronto Maple Leafs could perform strongly based on recent form. Outcomes are not guaranteed."
-      }
-    ],
-    snooker: [
-      {
-        id: 6,
-        teamA: "Ronnie O'Sullivan",
-        teamB: "Judd Trump",
-        matchTime: "2025-12-10T14:00:00Z",
-        winProbability: 0.65,
-        textCommentary:
-          "We suggest Ronnie O'Sullivan could perform strongly based on recent form. Outcomes are not guaranteed."
-      }
-    ]
-  };
-
+/**
+ * Primary endpoint: predictions + AI conclusion, per sport.
+ * GET /api/predictions-by-sport?sport=football
+ */
+app.get("/api/predictions-by-sport", async (req, res) => {
   try {
-    // Map sport to Sportradar schedule endpoints
-    const endpoints = {
-      football: `https://api.sportradar.com/soccer/trial/v4/en/schedules/${date}/results.json`,
-      rugby: `https://api.sportradar.com/rugby/trial/v2/en/schedules/${date}/results.json`,
-      tennis: `https://api.sportradar.com/tennis/trial/v3/en/schedules/${date}/results.json`,
-      basketball: `https://api.sportradar.com/basketball/trial/v7/en/schedules/${date}/results.json`,
-      icehockey: `https://api.sportradar.com/icehockey/trial/v2/en/schedules/${date}/results.json`,
-      snooker: `https://api.sportradar.com/snooker/trial/v2/en/schedules/${date}/results.json`
-    };
+    const sport = (req.query.sport || "").toLowerCase().trim();
 
-    if (endpoints[sport]) {
-      const url = `${endpoints[sport]}?api_key=${process.env.SPORTRADAR_API_KEY}`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data && Array.isArray(data.results)) {
-        matches = data.results
-          .filter(m => m?.sport_event?.competitors?.length >= 2)
-          .map(m => ({
-            id: m.sport_event.id,
-            teamA: m.sport_event.competitors[0].name,
-            teamB: m.sport_event.competitors[1].name,
-            matchTime: m.sport_event.start_time,
-            winProbability: 0.5, // placeholder until odds integrated
-            textCommentary: `We suggest ${m.sport_event.competitors[0].name} vs ${m.sport_event.competitors[1].name} could be competitive. Outcomes are not guaranteed.`
-          }));
-      }
-
-      // Fallback to stubs if no live data returned
-      if (!matches.length) {
-        matches = sampleMatches[sport] || [];
-      }
-    } else {
-      // Unknown sport: return stub if available
-      matches = sampleMatches[sport] || [];
+    if (!sport) {
+      return res.status(400).json({
+        error: "Missing required query parameter: sport",
+        hint:
+          "Use ?sport=football|rugby|tennis|basketball|icehockey|snooker",
+      });
     }
 
-    res.json({ matches });
+    if (!SUPPORTED_SPORTS.has(sport)) {
+      return res.status(400).json({
+        error: `Unsupported sport: '${sport}'`,
+        supported: Array.from(SUPPORTED_SPORTS),
+      });
+    }
+
+    if (!API_SPORTS_KEY) {
+      return res.status(500).json({
+        error: "API_SPORTS_KEY is not configured on the server",
+      });
+    }
+
+    const url = buildApiSportsUrlForPredictions(sport);
+    if (!url) {
+      return res.status(400).json({ error: "Sport mapping not found" });
+    }
+
+    let headers = {
+      accept: "application/json",
+      "x-apisports-key": API_SPORTS_KEY,
+    };
+
+    const upstreamResponse = await fetch(url, { method: "GET", headers });
+
+    if (!upstreamResponse.ok) {
+      const upstreamBody = await upstreamResponse
+        .text()
+        .catch(() => "Unable to read upstream response body");
+      return res.status(502).json({
+        error: "Upstream fetch to API-Sports failed",
+        status: upstreamResponse.status,
+        statusText: upstreamResponse.statusText,
+        upstreamBody,
+      });
+    }
+
+    const upstreamPayload = await upstreamResponse.json();
+
+    const normalized = normalizePredictionsResponse(sport, upstreamPayload);
+    normalized.expertConclusion = generateExpertConclusion(
+      sport,
+      upstreamPayload
+    );
+
+    res.set("Cache-Control", "public, max-age=30");
+
+    return res.json(normalized);
   } catch (err) {
     console.error("Error in /api/predictions-by-sport:", err);
-    // Safe fallback so Builder.io doesn't break
-    res.status(200).json({ matches: sampleMatches[sport] || [] });
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch predictions from API-Sports" });
   }
 });
 
-// ✅ FIX: Catch-all route must also use regex
-app.get(/.*/, (req, res) => {
-  res.json({ message: "Backend is running" });
-});
-
-const PORT = process.env.PORT || 4000;
+// ==============================
+// Server Start
+// ==============================
 app.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
 });
