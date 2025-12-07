@@ -19,9 +19,9 @@ app.use(express.json());
 // Config & Constants
 // ==============================
 const PORT = process.env.PORT || 4000;
-const SPORTRADAR_SOCCER_KEY = process.env.SPORTRADAR_SOCCER_KEY; // renamed for clarity
-const SPORTRADAR_BASE_URL =
-  process.env.SPORTRADAR_BASE_URL || "https://api.sportradar.com";
+const X_RAPIDAPI_KEY = process.env.X_RAPIDAPI_KEY; // RapidAPI key
+// Example RapidAPI base URL for API-Football (soccer). Replace with correct host for other sports.
+const RAPIDAPI_BASE_URL = "https://api-football-v1.p.rapidapi.com/v3";
 
 // Supported sports (aligned with your platform scope)
 const SUPPORTED_SPORTS = new Set([
@@ -38,24 +38,29 @@ const SUPPORTED_SPORTS = new Set([
 // ==============================
 
 /**
- * Build Sportradar URL for predictions by sport.
- * Adjust path/query to match actual Sportradar API.
+ * Build RapidAPI URL for predictions by sport.
+ * Adjust path/query to match actual RapidAPI endpoints.
  */
-function buildSportradarUrlForPredictions(sport) {
+function buildRapidApiUrlForPredictions(sport) {
   switch (sport) {
     case "football":
-      // football in UI maps to soccer in API
-      return `${SPORTRADAR_BASE_URL}/soccer/trial/v4/en/competitions.json`;
+      // football in UI maps to soccer in API-Football
+      return `${RAPIDAPI_BASE_URL}/fixtures?live=all`;
     case "rugby":
-      return `${SPORTRADAR_BASE_URL}/rugby/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
+      // Example placeholder — replace with actual RapidAPI rugby endpoint
+      return `https://example-rugby-api.p.rapidapi.com/matches`;
     case "tennis":
-      return `${SPORTRADAR_BASE_URL}/tennis/trial/v3/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
+      // Example placeholder — replace with actual RapidAPI tennis endpoint
+      return `https://example-tennis-api.p.rapidapi.com/matches`;
     case "basketball":
-      return `${SPORTRADAR_BASE_URL}/nba/trial/v8/en/games/2024/REG/schedule.json`;
+      // Example placeholder — replace with actual RapidAPI basketball endpoint
+      return `https://example-basketball-api.p.rapidapi.com/games`;
     case "icehockey":
-      return `${SPORTRADAR_BASE_URL}/icehockey/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
+      // Example placeholder — replace with actual RapidAPI icehockey endpoint
+      return `https://example-icehockey-api.p.rapidapi.com/matches`;
     case "snooker":
-      return `${SPORTRADAR_BASE_URL}/snooker/trial/v2/en/matches.json?api_key=${SPORTRADAR_SOCCER_KEY}`;
+      // Example placeholder — replace with actual RapidAPI snooker endpoint
+      return `https://example-snooker-api.p.rapidapi.com/matches`;
     default:
       return null;
   }
@@ -63,7 +68,6 @@ function buildSportradarUrlForPredictions(sport) {
 
 /**
  * Normalize upstream payload into a stable schema for the frontend.
- * Keep raw under data until you finalize mapping.
  */
 function normalizePredictionsResponse(sport, upstream) {
   return {
@@ -75,7 +79,6 @@ function normalizePredictionsResponse(sport, upstream) {
 
 /**
  * Generate AI-style expert conclusion from upstream data.
- * Replace with your real logic when ready.
  */
 function generateExpertConclusion(sport, upstream) {
   const teams =
@@ -113,33 +116,20 @@ function generateExpertConclusion(sport, upstream) {
 // Routes
 // ==============================
 
-/**
- * Root route — friendly landing page
- */
 app.get("/", (req, res) => {
   res.send(
     "Backend is live 🎉 Try /health, /api/supported-sports, or /api/predictions-by-sport?sport=football"
   );
 });
 
-/**
- * Health check — useful for monitoring and diagnostics.
- */
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime(), timestamp: Date.now() });
 });
 
-/**
- * Enumerate supported sports — allows frontend to bootstrap selectors.
- */
 app.get("/api/supported-sports", (req, res) => {
   res.json({ sports: Array.from(SUPPORTED_SPORTS) });
 });
 
-/**
- * Subscription plans — front-end driven display, static for now.
- * Replace with DB or billing API later.
- */
 app.get("/api/subscriptions", (req, res) => {
   res.json({
     plans: [
@@ -188,7 +178,6 @@ app.get("/api/predictions-by-sport", async (req, res) => {
   try {
     const sport = (req.query.sport || "").toLowerCase().trim();
 
-    // Validate sport query
     if (!sport) {
       return res.status(400).json({
         error: "Missing required query parameter: sport",
@@ -204,53 +193,45 @@ app.get("/api/predictions-by-sport", async (req, res) => {
       });
     }
 
-    if (!SPORTRADAR_SOCCER_KEY) {
+    if (!X_RAPIDAPI_KEY) {
       return res.status(500).json({
-        error: "SPORTRADAR_SOCCER_KEY is not configured on the server",
+        error: "X_RAPIDAPI_KEY is not configured on the server",
       });
     }
 
-    // Build upstream request to Sportradar
-    const url = buildSportradarUrlForPredictions(sport);
+    const url = buildRapidApiUrlForPredictions(sport);
     if (!url) {
       return res.status(400).json({ error: "Sport mapping not found" });
     }
 
-    // Auth style: soccer uses x-api-key header, NBA uses header, others use query param
-    let headers = { accept: "application/json" };
-    if (sport === "football") {
-      headers["x-api-key"] = SPORTRADAR_SOCCER_KEY;
-    }
-    if (sport === "basketball") {
-      headers["x-api-key"] = SPORTRADAR_SOCCER_KEY; // replace with NBA key later
-    }
+    let headers = {
+      accept: "application/json",
+      "X-RapidAPI-Key": X_RAPIDAPI_KEY,
+      "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com", // required for football
+    };
 
     const upstreamResponse = await fetch(url, { method: "GET", headers });
 
-    // Handle non-2xx upstream responses
     if (!upstreamResponse.ok) {
       const upstreamBody = await upstreamResponse
         .text()
         .catch(() => "Unable to read upstream response body");
       return res.status(502).json({
-        error: "Upstream fetch to Sportradar failed",
+        error: "Upstream fetch to RapidAPI failed",
         status: upstreamResponse.status,
         statusText: upstreamResponse.statusText,
         upstreamBody,
       });
     }
 
-    // Parse upstream payload
     const upstreamPayload = await upstreamResponse.json();
 
-    // Normalize and add expert conclusion
     const normalized = normalizePredictionsResponse(sport, upstreamPayload);
     normalized.expertConclusion = generateExpertConclusion(
       sport,
       upstreamPayload
     );
 
-    // Optional caching for slight performance
     res.set("Cache-Control", "public, max-age=30");
 
     return res.json(normalized);
@@ -258,7 +239,7 @@ app.get("/api/predictions-by-sport", async (req, res) => {
     console.error("Error in /api/predictions-by-sport:", err);
     return res
       .status(500)
-      .json({ error: "Failed to fetch predictions from Sportradar" });
+      .json({ error: "Failed to fetch predictions from RapidAPI" });
   }
 });
 
