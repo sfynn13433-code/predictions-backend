@@ -66,7 +66,9 @@ function buildApiSportsUrlForPredictions(sport) {
       return `${API_SPORTS_BASE.icehockey}/games?date=${today}`;
 
     case "tennis":
-      return `${API_SPORTS_BASE.tennis}/games?date=${today}`;
+      // Tennis requires season/tournament IDs, not just date.
+      // For now, return null so we can handle gracefully in the route.
+      return null;
 
     case "snooker":
       return `${API_SPORTS_BASE.snooker}/games?date=${today}`;
@@ -209,6 +211,18 @@ app.get("/api/predictions-by-sport", async (req, res) => {
     }
 
     const url = buildApiSportsUrlForPredictions(sport);
+
+    // Special handling for tennis
+    if (sport === "tennis" && !url) {
+      return res.json({
+        sport,
+        fetchedAt: new Date().toISOString(),
+        data: {},
+        expertConclusion:
+          "No tennis games available until a season or tournament is specified.",
+      });
+    }
+
     if (!url) {
       return res.status(400).json({ error: "Sport mapping not found" });
     }
