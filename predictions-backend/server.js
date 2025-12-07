@@ -49,19 +49,28 @@ const SUPPORTED_SPORTS = new Set([
  * Build API-Sports URL for predictions by sport.
  */
 function buildApiSportsUrlForPredictions(sport) {
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
   switch (sport) {
     case "football":
+      // Football supports live fixtures
       return `${API_SPORTS_BASE.football}/fixtures?live=all`;
-    case "rugby":
-      return `${API_SPORTS_BASE.rugby}/games?live=all`;
-    case "tennis":
-      return `${API_SPORTS_BASE.tennis}/games?live=all`;
+
     case "basketball":
-      return `${API_SPORTS_BASE.basketball}/games?live=all`;
+      return `${API_SPORTS_BASE.basketball}/games?date=${today}`;
+
+    case "rugby":
+      return `${API_SPORTS_BASE.rugby}/games?date=${today}`;
+
     case "icehockey":
-      return `${API_SPORTS_BASE.icehockey}/games?live=all`;
+      return `${API_SPORTS_BASE.icehockey}/games?date=${today}`;
+
+    case "tennis":
+      return `${API_SPORTS_BASE.tennis}/games?date=${today}`;
+
     case "snooker":
-      return `${API_SPORTS_BASE.snooker}/games?live=all`;
+      return `${API_SPORTS_BASE.snooker}/games?date=${today}`;
+
     default:
       return null;
   }
@@ -105,10 +114,9 @@ function generateExpertConclusion(sport, upstream) {
     upstream?.summary ||
     null;
 
-  const baseLine =
-    edge
-      ? `Edge to ${typeof edge === "string" ? edge : JSON.stringify(edge)}`
-      : "The match appears closely contested";
+  const baseLine = edge
+    ? `Edge to ${typeof edge === "string" ? edge : JSON.stringify(edge)}`
+    : "The match appears closely contested";
 
   return `Expert analysis for ${sport}: ${teamA} vs ${teamB}. ${baseLine}. Consider recent form, injuries, and venue effects; late team news may shift momentum. Predictions are guidance, not guarantees.`;
 }
@@ -225,6 +233,16 @@ app.get("/api/predictions-by-sport", async (req, res) => {
     }
 
     const upstreamPayload = await upstreamResponse.json();
+
+    // Fallback if no fixtures found
+    if (!upstreamPayload.response || upstreamPayload.response.length === 0) {
+      return res.json({
+        sport,
+        fetchedAt: new Date().toISOString(),
+        data: upstreamPayload,
+        expertConclusion: `No ${sport} games scheduled today.`,
+      });
+    }
 
     const normalized = normalizePredictionsResponse(sport, upstreamPayload);
     normalized.expertConclusion = generateExpertConclusion(
